@@ -6,7 +6,7 @@ const rollup_server = process.env.ROLLUP_HTTP_SERVER_URL;
 console.log("HTTP rollup_server url is " + rollup_server);
 
 let recipes = [];
-let recipeCount = 1;
+let recipeCount = 0;
 
 // helper functions
 function hex2Str(hex) {
@@ -45,7 +45,27 @@ async function handle_advance(data) {
 
 async function handle_inspect(data) {
   console.log("Received inspect request data " + JSON.stringify(data));
-  return "accept";
+  const metadata = data["metadata"];
+  let payload = data["payload"];
+  payload = JSON.parse(hex2Str(payload));
+
+  const method = payload["method"];
+  const handler = advance_method_handlers[method];
+
+  if (!(method in inspect_method_handlers)) {
+    const report_req = await fetch(rollup_server + "/report", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        payload: str2hex("warn: method not found"),
+      }),
+    });
+    return "reject";
+  }
+
+  return handler(payload);
 }
 
 // methods
@@ -95,6 +115,18 @@ const createRecipe = async (payload) => {
   });
 };
 
+const viewRecipes = async () => {
+  const notice_req = await fetch(rollup_server + "/notice", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      payload: str2hex("success: " + JSON.stringify(recipes).toString()),
+    }),
+  });
+};
+
 var handlers = {
   advance_state: handle_advance,
   inspect_state: handle_inspect,
@@ -102,6 +134,10 @@ var handlers = {
 
 var advance_method_handlers = {
   createRecipe: createRecipe,
+};
+
+var inspect_method_handlers = {
+  viewRecipes: viewRecipes,
 };
 
 var finish = { status: "accept" };
