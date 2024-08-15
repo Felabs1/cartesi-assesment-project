@@ -136,26 +136,49 @@ const updateRecipe = async (payload) => {
     return "reject";
   }
 
-  let recipeToEdit = recipes.find((recipe) => recipe.id == parseInt(recipeId));
+  recipes.forEach((recipe) => {
+    if (recipe.recipeId === parseInt(recipeId)) {
+      recipe.recipeName = recipeName;
+      recipe.ingredients = ingredients;
+      recipe.procedure = procedure;
+    }
+  });
 
-  if (recipeToEdit) {
-    recipeToEdit = {
-      ...recipeToEdit,
-      recipeName: recipeName,
-      ingredients: ingredients,
-      procedure: procedure,
-    };
+  const notice_req = await fetch(rollup_server + "/notice", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      payload: str2hex("successfully updated recipe: " + recipeId.toString()),
+    }),
+  });
+};
 
-    const notice_req = await fetch(rollup_server + "/notice", {
+// deleting a recipe
+
+const deleteRecipe = async (payload) => {
+  const recipeId = payload["recipeId"];
+
+  if (!recipeId) {
+    const report_req = await fetch(rollup_server + "/report", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        payload: str2hex("successfully updated recipe: " + recipeId.toString()),
+        payload: str2hex("not all parameters are in method"),
       }),
     });
+    return "reject";
   }
+
+  const index = recipes.findIndex((recipe) => recipe.recipeId === 0);
+  if (index !== -1) {
+    recipes.splice(index, 1);
+  }
+
+  return "accept";
 };
 
 var handlers = {
@@ -166,6 +189,7 @@ var handlers = {
 var advance_method_handlers = {
   createRecipe: createRecipe,
   updateRecipe: updateRecipe,
+  deleteRecipe: deleteRecipe,
 };
 
 var finish = { status: "accept" };
