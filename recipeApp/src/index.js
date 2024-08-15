@@ -6,7 +6,7 @@ const rollup_server = process.env.ROLLUP_HTTP_SERVER_URL;
 console.log("HTTP rollup_server url is " + rollup_server);
 
 let recipes = [];
-let recipeCount = 0;
+let recipeCount = 1;
 
 // helper functions
 function hex2Str(hex) {
@@ -45,27 +45,29 @@ async function handle_advance(data) {
 
 async function handle_inspect(data) {
   console.log("Received inspect request data " + JSON.stringify(data));
-  const metadata = data["metadata"];
-  let payload = data["payload"];
-  payload = JSON.parse(hex2Str(payload));
+  const payload = data["payload"];
+  const route = hex2Str(payload);
 
-  const method = payload["method"];
-  const handler = advance_method_handlers[method];
-
-  if (!(method in inspect_method_handlers)) {
-    const report_req = await fetch(rollup_server + "/report", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        payload: str2hex("warn: method not found"),
-      }),
-    });
-    return "reject";
+  let responseObj;
+  switch (route) {
+    case "viewRecipes":
+      responseObj = JSON.stringify({ recipes });
+      break;
+    default:
+      responseObj = "route not implemented";
   }
 
-  return handler(payload);
+  const report_req = await fetch(rollup_server + "/report", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      payload: str2hex(responseObj),
+    }),
+  });
+
+  return "accept";
 }
 
 // methods
@@ -115,16 +117,45 @@ const createRecipe = async (payload) => {
   });
 };
 
-const viewRecipes = async () => {
-  const notice_req = await fetch(rollup_server + "/notice", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      payload: str2hex("success: " + JSON.stringify(recipes).toString()),
-    }),
-  });
+const updateRecipe = async (payload) => {
+  const recipeId = payload["recipeId"];
+  const recipeName = payload["recipeName"];
+  const ingredients = payload["ingredients"];
+  const procedure = payload["procedure"];
+
+  if (!recipeId) {
+    const report_req = await fetch(rollup_server + "/report", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        payload: str2hex("not all parameters are in method"),
+      }),
+    });
+    return "reject";
+  }
+
+  let recipeToEdit = recipes.find((recipe) => recipe.id == parseInt(recipeId));
+
+  if (recipeToEdit) {
+    recipeToEdit = {
+      ...recipeToEdit,
+      recipeName: recipeName,
+      ingredients: ingredients,
+      procedure: procedure,
+    };
+
+    const notice_req = await fetch(rollup_server + "/notice", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        payload: str2hex("successfully updated recipe: " + recipeId.toString()),
+      }),
+    });
+  }
 };
 
 var handlers = {
@@ -134,10 +165,7 @@ var handlers = {
 
 var advance_method_handlers = {
   createRecipe: createRecipe,
-};
-
-var inspect_method_handlers = {
-  viewRecipes: viewRecipes,
+  updateRecipe: updateRecipe,
 };
 
 var finish = { status: "accept" };
